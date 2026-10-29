@@ -107,6 +107,33 @@ Other faults: `POST /fault/cpu`, `POST /fault/container-loop`, and `POST /fault/
 
 Tear down: `docker compose down -v`
 
+## Team workflow
+
+| Person | Role | Branch | Owns |
+| :-- | :-- | :-- | :-- |
+| 1 | Target Node & Chaos Engineer | `feat/machine-node` | `machine-node/` |
+| 2 | Orchestration & Remediation | `feat/remediation-engine` | `remediation-engine/`, `docker-compose.yml` |
+| 3 | Smart LB, Traefik & UI | `feat/smart-lb` | `smart-lb-controller/` (+ Traefik labels) |
+| 4 | Observability, Loki & Grafana | `feat/observability-stack` | `observability/` |
+
+```bash
+git clone https://github.com/iot-lab-kiit/Self-Healing-Service-.git
+cd Self-Healing-Service-
+git checkout feat/<your-branch>        # e.g. feat/machine-node
+# ...work only inside your own folder...
+git add <your-folder> && git commit -m "machine-node: ..."
+git push
+# open a PR into main when your part is ready
+```
+
+Rules:
+- Stay inside the folder you own, so branches merge without conflicts. Changes to `docker-compose.yml` go through Person 2.
+- Ports, metric names and JSON payloads in **Contracts** are frozen. Change them only if all four people agree, and update `CLAUDE.md` and this README in the same PR.
+- Rebase on `main` before opening a PR: `git fetch origin && git rebase origin/main`.
+
+### Known issue to pick up
+- `remediation-engine` and `smart-lb-controller` use `axios` with default proxy settings. If a machine's Docker Desktop has an HTTP proxy configured, the internal calls (`http://machine-1:3000/health`) go through that proxy and fail. Fix: create the client with `axios.create({ proxy: false })` (Persons 2 and 3).
+
 ## Project layout
 
 ```text
