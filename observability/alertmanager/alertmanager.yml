@@ -1,0 +1,15 @@
+# Every firing alert for one machine is grouped into a single webhook so the
+# Remediation Engine performs exactly one restart per node.
+route:
+  receiver: remediation-engine
+  group_by: ['machine_id']
+  group_wait: 2s
+  group_interval: 5s
+  repeat_interval: 2m
+
+receivers:
+  - name: remediation-engine
+    webhook_configs:
+      - url: http://remediation-engine:4000/webhook
+        send_resolved: false
+        max_alerts: 0

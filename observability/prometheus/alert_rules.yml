@@ -1,0 +1,66 @@
+groups:
+  - name: self-healing-node-alerts
+    interval: 5s
+    rules:
+      # ---- In-app telemetry: > 85% continuously for 60s -------------------------------------
+      - alert: SustainedHighRAM
+        expr: node_ram_usage_percent > 85
+        for: 60s
+        labels:
+          severity: critical
+        annotations:
+          summary: "High RAM utilization on {{ $labels.machine_id }} (>85% for >=60s)"
+          description: "{{ $labels.machine_id }} RAM is at {{ $value | printf \"%.1f\" }}%"
+
+      - alert: SustainedHighCPU
+        expr: node_cpu_load_percent > 85
+        for: 60s
+        labels:
+          severity: critical
+        annotations:
+          summary: "High CPU load on {{ $labels.machine_id }} (>85% for >=60s)"
+          description: "{{ $labels.machine_id }} CPU is at {{ $value | printf \"%.1f\" }}%"
+
+      - alert: SustainedHighGPU
+        expr: node_gpu_utilization_percent > 85
+        for: 60s
+        labels:
+          severity: critical
+        annotations:
+          summary: "High GPU utilization on {{ $labels.machine_id }} (>85% for >=60s)"
+          description: "{{ $labels.machine_id }} GPU is at {{ $value | printf \"%.1f\" }}%"
+
+      - alert: RogueContainerLoop
+        expr: increase(node_container_restart_count[1m]) > 3
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Runaway container spin-up loop on {{ $labels.machine_id }}"
+          description: "{{ $labels.machine_id }} spun up {{ $value | printf \"%.0f\" }} containers in the last minute"
+
+      # ---- Out-of-band (cAdvisor cgroup) rules: fire even if the Node.js event loop is frozen ----
+      - alert: ContainerMemoryNearLimit
+        expr: |
+          label_replace(
+            100 * container_memory_working_set_bytes{name=~"machine-[1-5]"}
+                / container_spec_memory_limit_bytes{name=~"machine-[1-5]"},
+            "machine_id", "$1", "name", "(.*)"
+          ) > 85
+        for: 60s
+        labels:
+          severity: critical
+        annotations:
+          summary: "cAdvisor: {{ $labels.machine_id }} container memory above 85% of its limit for >=60s"
+
+      - alert: ContainerCpuSaturated
+        expr: |
+          label_replace(
+            100 * rate(container_cpu_usage_seconds_total{name=~"machine-[1-5]"}[30s]),
+            "machine_id", "$1", "name", "(.*)"
+          ) > 85
+        for: 60s
+        labels:
+          severity: critical
+        annotations:
+          summary: "cAdvisor: {{ $labels.machine_id }} container CPU above 85% for >=60s"

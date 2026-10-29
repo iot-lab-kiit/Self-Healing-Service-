@@ -1,0 +1,18 @@
+{
+  "name": "machine-node",
+  "version": "1.0.0",
+  "description": "Simulated cluster node: Express API, Prometheus telemetry and deterministic fault injection",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node --expose-gc src/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "prom-client": "^15.1.3",
+    "systeminformation": "^5.23.5"
+  }
+}

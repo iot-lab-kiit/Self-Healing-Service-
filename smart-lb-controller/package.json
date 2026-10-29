@@ -1,0 +1,17 @@
+{
+  "name": "smart-lb-controller",
+  "version": "1.0.0",
+  "description": "Cluster state registry and exclusive-service gatekeeper with a live self-healing waiting screen",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}

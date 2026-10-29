@@ -1,0 +1,34 @@
+# Discovers every container through the Docker socket and streams its stdout/stderr to Loki,
+# so forensic logs are already stored before the Remediation Engine restarts a container.
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+positions:
+  filename: /promtail/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: container_name
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: compose_service
+    pipeline_stages:
+      - docker: {}
+      # Services emit JSON lines; promote the low-cardinality fields to labels
+      - json:
+          expressions:
+            level: level
+            machine_id: machineId
+      - labels:
+          level:
+          machine_id:
