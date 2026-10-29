@@ -1,0 +1,22 @@
+{
+  "version": "4",
+  "groupKey": "{}:{machine_id=\"machine-5\"}",
+  "truncatedAlerts": 0,
+  "status": "firing",
+  "receiver": "remediation-engine",
+  "groupLabels": { "machine_id": "machine-5" },
+  "commonLabels": {},
+  "commonAnnotations": {},
+  "externalURL": "http://alertmanager:9093",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": { "alertname": "ContainerMemoryNearLimit", "machine_id": "machine-5", "name": "machine-5", "id": "/docker/abc123", "image": "self-healing/machine-node:latest", "severity": "critical" },
+      "annotations": { "summary": "ContainerMemoryNearLimit on test node" },
+      "startsAt": "2026-10-30T10:00:00.000Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://prometheus:9090/graph",
+      "fingerprint": "02b3237f133fb0b9"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "version": "4",
+  "groupKey": "{}:{machine_id=\"multi\"}",
+  "truncatedAlerts": 0,
+  "status": "firing",
+  "receiver": "remediation-engine",
+  "groupLabels": { "machine_id": "multi" },
+  "commonLabels": {},
+  "commonAnnotations": {},
+  "externalURL": "http://alertmanager:9093",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": { "alertname": "SustainedHighCPU", "machine_id": "machine-2", "severity": "critical" },
+      "annotations": { "summary": "SustainedHighCPU on test node" },
+      "startsAt": "2026-10-30T10:00:00.000Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://prometheus:9090/graph",
+      "fingerprint": "be68bfcdaa8690aa"
+    },
+    {
+      "status": "firing",
+      "labels": { "alertname": "SustainedHighRAM", "machine_id": "machine-4", "severity": "critical" },
+      "annotations": { "summary": "SustainedHighRAM on test node" },
+      "startsAt": "2026-10-30T10:00:00.000Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://prometheus:9090/graph",
+      "fingerprint": "451d98dd683bc271"
+    }
+  ]
+}

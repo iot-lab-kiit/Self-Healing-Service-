@@ -149,7 +149,7 @@ Rules:
 
 **Metrics** (`GET /metrics` on every node, label `machine_id`): `node_ram_usage_percent`, `node_cpu_load_percent`, `node_gpu_utilization_percent`, `node_container_restart_count`, `node_active_connections`, plus default `prom-client` process metrics.
 
-**Alertmanager webhook** `POST http://remediation-engine:4000/webhook` (alias: `/api/v1/remediate`) - standard Alertmanager v4 payload; `machine_id` label, falling back to `instance` host.
+**Alertmanager webhook** `POST http://remediation-engine:4000/webhook` (alias: `/api/v1/remediate`) - standard Alertmanager v4 payload; `machine_id` label, falling back to `instance` host. After 3 consecutive failed remediations of a node within 10 min the engine stops restarting it (`skipped reason: "circuit_open"`, `remediation_circuit_open{machine_id}` = 1) until `POST /reset/<machine-id>`. `remediation_total` results: `success`, `container_not_found`, `restart_failed`, `health_timeout`, `lb_unreachable`.
 
 **LB handshake** `POST http://smart-lb-controller:5000/internal/node-status`
 

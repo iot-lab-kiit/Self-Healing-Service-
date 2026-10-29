@@ -1,0 +1,49 @@
+{
+  "version": "4",
+  "groupKey": "{}:{machine_id=\"bad\"}",
+  "truncatedAlerts": 0,
+  "status": "firing",
+  "receiver": "remediation-engine",
+  "groupLabels": { "machine_id": "bad" },
+  "commonLabels": {},
+  "commonAnnotations": {},
+  "externalURL": "http://alertmanager:9093",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": { "alertname": "SustainedHighRAM", "machine_id": "machine-0", "severity": "critical" },
+      "annotations": { "summary": "SustainedHighRAM on test node" },
+      "startsAt": "2026-10-30T10:00:00.000Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://prometheus:9090/graph",
+      "fingerprint": "1b7b6137612e1b2f"
+    },
+    {
+      "status": "firing",
+      "labels": { "alertname": "SustainedHighRAM", "machine_id": "../etc", "severity": "critical" },
+      "annotations": { "summary": "SustainedHighRAM on test node" },
+      "startsAt": "2026-10-30T10:00:00.000Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://prometheus:9090/graph",
+      "fingerprint": "4b94be5b8a8ddf5b"
+    },
+    {
+      "status": "firing",
+      "labels": { "alertname": "SustainedHighRAM", "machine_id": "machine-1; rm -rf /", "severity": "critical" },
+      "annotations": { "summary": "SustainedHighRAM on test node" },
+      "startsAt": "2026-10-30T10:00:00.000Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://prometheus:9090/graph",
+      "fingerprint": "1ecc888af5083bea"
+    },
+    {
+      "status": "firing",
+      "labels": { "alertname": "SustainedHighRAM" },
+      "annotations": { "summary": "SustainedHighRAM on test node" },
+      "startsAt": "2026-10-30T10:00:00.000Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://prometheus:9090/graph",
+      "fingerprint": "34609035f5b5b953"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "version": "4",
+  "groupKey": "{}:{machine_id=\"machine-3\"}",
+  "truncatedAlerts": 0,
+  "status": "firing",
+  "receiver": "remediation-engine",
+  "groupLabels": { "machine_id": "machine-3" },
+  "commonLabels": {},
+  "commonAnnotations": {},
+  "externalURL": "http://alertmanager:9093",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": { "alertname": "SustainedHighCPU", "instance": "machine-3:3000", "job": "machine-nodes", "severity": "critical" },
+      "annotations": { "summary": "SustainedHighCPU on test node" },
+      "startsAt": "2026-10-30T10:00:00.000Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://prometheus:9090/graph",
+      "fingerprint": "9953a0dae45dd83d"
+    }
+  ]
+}
