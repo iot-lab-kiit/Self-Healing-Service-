@@ -13,6 +13,9 @@
 - Reset all faults on Node 1: `curl -X POST http://localhost:3001/fault/reset`
 - View Smart LB logs: `docker compose logs -f smart-lb-controller`
 
+## Git Conventions
+- Never add Claude attribution to commits or PRs: no `Co-Authored-By: Claude ...`, no `Claude-Session: ...`, no "Generated with Claude Code" footer.
+
 ## Architectural Invariants (DO NOT VIOLATE)
 1. **Metrics Keys:** Always expose `node_ram_usage_percent`, `node_cpu_load_percent`, `node_gpu_utilization_percent`, `node_container_restart_count`, and `node_active_connections` on `GET /metrics` (label `machine_id`).
 2. **Alert Thresholds:** Prometheus must scrape every `5s` and evaluate sustained resource anomalies at `> 85%` for `for: 60s`.
