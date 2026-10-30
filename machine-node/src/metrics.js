@@ -24,8 +24,11 @@ const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 const wobble = (amp, periodMs) => Math.sin(Date.now() / periodMs) * amp;
 
 // ---------------------------------------------------------------- RAM
+// RSS reader is an overridable property so tests can simulate memory growth deterministically
+const mem = { rss: () => process.memoryUsage().rss };
+
 function ramPercent() {
-  const real = (process.memoryUsage().rss / MEM_LIMIT_BYTES) * 100;
+  const real = (mem.rss() / MEM_LIMIT_BYTES) * 100;
   if (faults.memory && state.memoryPlateaued) {
     return clamp(Math.max(real, 89.5), 89, 90);
   }
@@ -130,7 +133,8 @@ const restartCounter = new client.Counter({
   labelNames: ['machine_id'],
   registers: [register],
 });
-restartCounter.labels(MACHINE_ID); // export a 0 sample immediately
+// inc by 0 exports a 0 sample immediately (labels() alone does not create a series)
+restartCounter.inc({ machine_id: MACHINE_ID }, 0);
 
 new client.Gauge({
   name: 'node_active_connections',
@@ -183,6 +187,7 @@ module.exports = {
   register,
   faults,
   state,
+  mem,
   restartCounter,
   ramPercent,
   cpuPercent,

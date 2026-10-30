@@ -4,7 +4,8 @@
   "description": "Simulated cluster node: Express API, Prometheus telemetry and deterministic fault injection",
   "main": "src/index.js",
   "scripts": {
-    "start": "node --expose-gc src/index.js"
+    "start": "node --expose-gc src/index.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"

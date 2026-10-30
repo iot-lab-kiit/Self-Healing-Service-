@@ -6,7 +6,7 @@ const m = require('./metrics');
 const router = express.Router();
 const MB = 1024 * 1024;
 
-const leak = { chunks: [], timer: null };
+const leak = { chunks: [], bytes: 0, timer: null };
 let cpuTimer = null;
 let loopTimer = null;
 let loopCount = 0;
@@ -37,7 +37,9 @@ function startMemoryLeak() {
 
   const target = m.MEM_LIMIT_BYTES * m.MEM_TARGET_RATIO;
   leak.timer = setInterval(() => {
-    const remaining = target - process.memoryUsage().rss;
+    // Also bound by bytes already leaked, so allocation stays finite even if RSS lags behind
+    // (lazily committed pages, buffers from a previous run not yet collected).
+    const remaining = Math.min(target - m.mem.rss(), target - leak.bytes);
     if (remaining < 512 * 1024) {
       clearInterval(leak.timer);
       leak.timer = null;
@@ -46,7 +48,9 @@ function startMemoryLeak() {
       return;
     }
     // fill(1) forces the OS to commit the pages so RSS really grows
-    leak.chunks.push(Buffer.alloc(Math.min(10 * MB, Math.floor(remaining)), 1));
+    const chunk = Buffer.alloc(Math.min(10 * MB, Math.floor(remaining)), 1);
+    leak.chunks.push(chunk);
+    leak.bytes += chunk.length;
   }, 500);
   return true;
 }
@@ -94,6 +98,7 @@ function resetAll() {
   if (loopTimer) clearInterval(loopTimer);
   leak.timer = cpuTimer = loopTimer = null;
   leak.chunks.length = 0;
+  leak.bytes = 0;
   m.state.memoryPlateaued = false;
   Object.keys(m.faults).forEach((k) => {
     m.faults[k] = false;
@@ -129,4 +134,4 @@ router.post('/reset', (req, res) => {
   res.json({ ok: true, fault: 'reset', ...snapshot() });
 });
 
-module.exports = { router, resetAll };
+module.exports = { router, resetAll, leak };
