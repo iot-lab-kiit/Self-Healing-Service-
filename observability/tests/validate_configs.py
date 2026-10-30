@@ -576,6 +576,11 @@ class GrafanaTests(unittest.TestCase):
 
 
 # ----------------------------------------------------------------------------- source cross-checks
+def engine_source():
+    """All engine source files: routes may live in index.js or a separate app module."""
+    return "\n".join(p.read_text(encoding="utf-8") for p in sorted(ENGINE_SRC.glob("*.js")))
+
+
 class SourceCrossCheckTests(unittest.TestCase):
     def test_machine_node_emits_invariant_metrics_with_machine_id(self):
         text = NODE_METRICS_JS.read_text(encoding="utf-8")
@@ -591,11 +596,11 @@ class SourceCrossCheckTests(unittest.TestCase):
             self.assertIn(metric, names)
 
     def test_engine_machine_id_pattern_matches_tests(self):
-        text = (ENGINE_SRC / "index.js").read_text(encoding="utf-8")
+        text = engine_source()
         self.assertIn("/^machine-[1-9][0-9]*$/", text)
 
     def test_engine_serves_metrics_and_webhook(self):
-        text = (ENGINE_SRC / "index.js").read_text(encoding="utf-8")
+        text = engine_source()
         self.assertIn("app.get('/metrics'", text)
         self.assertIn("app.post('/webhook'", text)
 
