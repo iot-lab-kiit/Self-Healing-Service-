@@ -169,8 +169,15 @@ new client.Gauge({
   },
 });
 
+function resetCpuBaseline() {
+  lastCpu = process.cpuUsage();
+  lastHr = process.hrtime.bigint();
+}
+
 function startSamplers() {
-  sampleCpu();
+  // Start the CPU window now: sampling from module load would count startup work (require + express
+  // init) over a tiny wall-clock window and report ~100% right after every restart.
+  resetCpuBaseline();
   sampleGpu();
   sampleHost();
   setInterval(sampleCpu, 2000).unref();
