@@ -335,28 +335,35 @@ class AlertRuleTests(unittest.TestCase):
                     self.assertRegex(r["expr"], r"by\s*\([^)]*machine_id")
 
     def test_cadvisor_rules_produce_valid_machine_id(self):
-        """Simulate label_replace on every compose container name the name=~ matcher selects."""
+        """Simulate label_replace on the MACHINE_ID env label cAdvisor exports (containerd mode)."""
         cadvisor_rules = [r for r in all_rules() if "label_replace" in r["expr"]]
         self.assertEqual({r["alert"] for r in cadvisor_rules}, {"ContainerMemoryNearLimit", "ContainerCpuSaturated"})
-        container_names = {svc: cfg.get("container_name", svc) for svc, cfg in COMPOSE["services"].items()}
+        # Only containers that set MACHINE_ID get the label; everything else has it empty
+        env_ids = {svc: (cfg.get("environment") or {}).get("MACHINE_ID", "") for svc, cfg in COMPOSE["services"].items()}
         for r in cadvisor_rules:
             m = LABEL_REPLACE_RE.search(r["expr"])
             self.assertIsNotNone(m, r["alert"])
             self.assertEqual(m.group("dst"), "machine_id")
-            self.assertEqual(m.group("src"), "name")
-            matchers = set(re.findall(r'name=~"([^"]+)"', m.group("inner")))
-            self.assertEqual(len(matchers), 1, "all selectors must use the same name matcher")
+            self.assertEqual(m.group("src"), "container_env_MACHINE_ID")
+            matchers = set(re.findall(r'container_env_MACHINE_ID=~"([^"]+)"', m.group("inner")))
+            self.assertEqual(len(matchers), 1, "all selectors must use the same MACHINE_ID matcher")
             matcher = matchers.pop()
-            selected = sorted(n for n in container_names.values() if go_full_match(matcher, n))
+            selected = sorted(v for v in env_ids.values() if go_full_match(matcher, v))
             with self.subTest(alert=r["alert"]):
                 self.assertEqual(selected, MACHINES)  # never selects remediation-engine, cadvisor, ...
-                for name in selected:
-                    out = label_replace({"name": name}, m.group("dst"), m.group("repl"), m.group("src"), m.group("regex"))
-                    self.assertEqual(out.get("machine_id"), name)
+                for mid in selected:
+                    out = label_replace({"container_env_MACHINE_ID": mid}, m.group("dst"), m.group("repl"), m.group("src"), m.group("regex"))
+                    self.assertEqual(out.get("machine_id"), mid)
                     self.assertRegex(out["machine_id"], MACHINE_ID_RE)
 
+    def test_cadvisor_exports_machine_id_env(self):
+        """The rules depend on cAdvisor whitelisting MACHINE_ID and reading containers via containerd."""
+        cmd = " ".join(COMPOSE["services"]["cadvisor"].get("command") or [])
+        self.assertIn("--env_metadata_whitelist=MACHINE_ID", cmd)
+        self.assertIn("--containerd-namespace=moby", cmd)
+
     def test_compose_container_names_match_machine_ids(self):
-        """cAdvisor's `name` label is the docker container name; it must equal MACHINE_ID."""
+        """MACHINE_ID (cAdvisor label, metrics label) must equal the container name the engine restarts."""
         for m in MACHINES:
             svc = COMPOSE["services"][m]
             self.assertEqual(svc.get("container_name"), m)

@@ -158,9 +158,16 @@ services:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     container_name: cadvisor
     privileged: true
+    # Docker 29's containerd image store breaks cAdvisor's docker handler ("failed to identify the
+    # read-write layer ID"), so read containers through containerd's "moby" namespace instead and label
+    # them with the node's MACHINE_ID env var. The bogus --docker socket disables the broken handler.
     command:
       - --housekeeping_interval=5s
-      - --docker_only=true
+      - --docker=unix:///var/run/cadvisor-docker-disabled.sock
+      - --containerd=/var/run/containerd/containerd.sock
+      - --containerd-namespace=moby
+      - --env_metadata_whitelist=MACHINE_ID
+      - --store_container_labels=false
     ports:
       - "127.0.0.1:8082:8080"
     volumes:
