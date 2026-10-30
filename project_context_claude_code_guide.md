@@ -308,7 +308,16 @@ The real machine-node, smart-lb-controller and remediation-engine code ran toget
 - **machine-node and remediation-engine:** errors return JSON with no stack trace; the memory fault has a hard allocation cap.
 - **Alert rules:** the cAdvisor memory rule ignores containers with no memory limit, which prevents a false alert and a restart storm.
 
-### 9.5 Open items
-1. Run `powershell -ExecutionPolicy Bypass -File remediation-engine/scripts/e2e.ps1` on a machine with Docker to confirm the live loop and measure MTTR.
-2. Check that `gcr.io/cadvisor/cadvisor:v0.49.1` and `grafana/promtail:3.2.1` start on Docker Engine 29+. Like Traefik v3.0, they may report "client version too old".
-3. Accepted for the demo: Grafana `admin/admin` with anonymous Viewer access, and the remediation engine has read-write access to the Docker socket (needed for restarts).
+### 9.5 Live cluster results (Docker 29.9.2, `dev-test`)
+
+- **Single host:** all 14 containers ran and 12 faults were healed (RAM, CPU, GPU and container-loop faults across all 5 machines), each in 4.3-6.7 s. The LB recorded `REBOOTING` before Docker sent SIGTERM every time. Over the runs, `/api/shared` answered thousands of requests with 0 failures, and `/api/gpu-render` only ever returned 200 or a 503 countdown, never a 502.
+- **cAdvisor on Docker 29:** its Docker handler failed with "failed to identify the read-write layer ID". It now reads containers through containerd and labels them by `MACHINE_ID`. Verified live: the out-of-band rules have data for all 5 machines.
+- **CPU after a restart:** the first reading used to be about 100% (startup work). After the fix it reads 0.9-1.3%.
+- **5 machines (simulated with 5 separate Docker daemons, `deploy/multihost/simulate.ps1`):**
+  - Traefik spread `/api/shared` evenly across the 5 hosts.
+  - The engine restarted machine-1 through host-1's own Docker API over TLS, in 4.3 s, with 0 failed shared requests.
+  - Stopping a whole host (machine-3) caused 0 failed shared requests.
+
+### 9.6 Open items
+1. **Whole-host loss of machine-1:** nobody tells the Smart LB, so `/api/gpu-render` waits for the 5 s upstream timeout and returns "Upstream Unavailable" instead of the countdown. Fix: the Smart LB probes machine-1's `/health` itself.
+2. **Accepted for the demo:** Grafana `admin/admin` with anonymous Viewer access; the remediation engine has read-write access to the local Docker socket. On multiple machines it uses TLS client certificates instead.

@@ -107,6 +107,28 @@ Other faults: `POST /fault/cpu`, `POST /fault/container-loop`, and `POST /fault/
 
 Tear down: `docker compose down -v`
 
+## Tests
+
+Each service has its own suite, and one test runs the real services together. Run `npm install` in each service folder first.
+
+| What | Command |
+| :-- | :-- |
+| machine-node | `cd machine-node && npm test` |
+| remediation-engine | `cd remediation-engine && npm test` |
+| smart-lb-controller | `cd smart-lb-controller && npm test` |
+| observability configs | `python -m unittest discover -s observability/tests -v` |
+| all services together (Docker faked) | `node --test tests/integration/cross-service.test.js` |
+| live cluster end to end | `powershell -ExecutionPolicy Bypass -File remediation-engine/scripts/e2e.ps1` |
+
+## Running on 5 physical machines
+
+`deploy/multihost/` splits the stack into a central server and a per-machine part:
+- **Traefik** balances over the machines' addresses.
+- **The Remediation Engine** restarts each node through that machine's Docker API over mutual TLS (`DOCKER_HOSTS`).
+- **`simulate.ps1`** stands up 5 separate Docker daemons to try this setup on one computer.
+
+See [deploy/multihost/README.md](deploy/multihost/README.md).
+
 ## Team workflow
 
 | Person | Role | Branch | Owns |
@@ -131,9 +153,6 @@ Rules:
 - Ports, metric names and JSON payloads in **Contracts** are frozen. Change them only if all four people agree, and update `CLAUDE.md` and this README in the same PR.
 - Rebase on `main` before opening a PR: `git fetch origin && git rebase origin/main`.
 
-### Known issue to pick up
-- `remediation-engine` and `smart-lb-controller` use `axios` with default proxy settings. If a machine's Docker Desktop has an HTTP proxy configured, the internal calls (`http://machine-1:3000/health`) go through that proxy and fail. Fix: create the client with `axios.create({ proxy: false })` (Persons 2 and 3).
-
 ## Project layout
 
 ```text
@@ -142,7 +161,9 @@ Rules:
 ├── machine-node/               Express API, prom-client telemetry, fault injection
 ├── remediation-engine/         Alertmanager webhook -> handshake -> Dockerode restart -> verify
 ├── smart-lb-controller/        State registry, exclusive-service gatekeeper, waitingScreen.html
-└── observability/              Prometheus, Alertmanager, Loki, Promtail, Grafana provisioning
+├── observability/              Prometheus, Alertmanager, Loki, Promtail, Grafana provisioning
+├── deploy/multihost/           Server + per-machine compose files, 5-host simulation
+└── tests/integration/          Cross-service test (real node, LB and engine code)
 ```
 
 ## Contracts
@@ -164,7 +185,7 @@ Rules:
 - **CPU metric** is per-container (process CPU time / wall time, one core). `systeminformation.currentLoad()` is host-wide, so it is exported separately as `node_host_cpu_load_percent` and never alerted on - a busy laptop must not trigger false reboots.
 - **GPU**: `SIMULATE_GPU=true` reports an 8-15% baseline; `/fault/gpu` pins it at ~93%. With `SIMULATE_GPU=false` a readable physical GPU is used.
 - **Alert grouping**: Alertmanager groups by `machine_id`, so RAM + GPU alerts on one node produce one webhook and one restart. The engine also enforces a 45 s per-node cooldown and an in-flight guard.
-- **cAdvisor rules** (`ContainerMemoryNearLimit`, `ContainerCpuSaturated`) catch a node whose event loop is frozen and can no longer serve `/metrics`.
+- **cAdvisor rules** (`ContainerMemoryNearLimit`, `ContainerCpuSaturated`) catch a node whose event loop is frozen and can no longer serve `/metrics`. Docker 29's containerd image store breaks cAdvisor's Docker handler, so cAdvisor reads containers through containerd (`moby` namespace) and labels them with the node's `MACHINE_ID` env var. This works on Docker Desktop and on Linux.
 - **Logs survive restarts**: Promtail streams stdout/stderr to Loki continuously, so the crash evidence is stored before the container is restarted.
 - **Accept negotiation**: `/api/gpu-render` during a reboot returns the HTML page only when the client prefers HTML (browsers). `curl` and API clients get JSON.
 - **Remediation metrics** (`remediation_total`, `remediation_duration_seconds`, `remediation_last_duration_seconds`) feed the MTTR panels in Grafana.
@@ -172,5 +193,5 @@ Rules:
 ## Troubleshooting
 
 - **Traefik: "client version 1.24 is too old"** - Docker Engine 29+ needs a newer Traefik; `TRAEFIK_IMAGE` defaults to `traefik:v3.6`.
-- **No cAdvisor data on Docker Desktop** - the out-of-band alerts stay silent, the in-app alerts still work.
+- **cAdvisor logs "failed to identify the read-write layer ID"** - its Docker handler is not used. If `container_memory_working_set_bytes{container_env_MACHINE_ID=~"machine-.+"}` is empty in Prometheus, check that `/var/run/containerd/containerd.sock` exists inside the cAdvisor container.
 - **Nothing happens after the fault** - check `http://localhost:9090/alerts`; the alert must be above 85% for a full 60 s. `docker compose logs remediation-engine` shows the webhook and cooldown decisions.

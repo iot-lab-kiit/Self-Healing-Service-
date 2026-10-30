@@ -260,4 +260,6 @@ Full results are in `project_context_claude_code_guide.md` §9.
 - [x] **Phase 3 – smart-lb-controller** (`feat/smart-lb`, 41 tests): registry, `/cluster-status`, `/api/gpu-render` proxy and 503 gate with `Retry-After`, HTML/JSON chosen by `Accept`, escaped waiting screen.
 - [x] **Phase 4 – observability** (`feat/observability-stack`, 51 config checks): 5 s scrape, `> 85` for 60 s, Alertmanager → `remediation-engine:4000/webhook`, Loki/Promtail, Grafana provisioning.
 - [x] **Integration:** all four branches merge without conflicts; 142 tests pass on the merged tree; a 12-check cross-service run of the real code (Docker faked) covers fault → alert → 503 gate → restart → `ONLINE`, plus the failure path.
-- [ ] **§6 demo on a live cluster:** run `remediation-engine/scripts/e2e.ps1` with Docker (not available on the verification machine).
+- [x] **§6 demo on a live cluster:** run on Docker 29.9.2. 12 self-heals took 4.3-6.7 s each, with 0 failed `/api/shared` requests and the countdown page during machine-1 reboots.
+- [x] **Multi-machine:** `deploy/multihost/` (server + per-machine compose files), checked with 5 separate Docker daemons; remote restarts go over TLS.
+- [ ] **Smart LB health probe for machine-1:** makes losing the whole host show the countdown immediately (see context doc §9.6).
