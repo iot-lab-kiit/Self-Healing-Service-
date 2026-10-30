@@ -1,0 +1,53 @@
+# Simulation of 5 physical machines on one computer: each "machine" is a separate Docker daemon
+# (Docker-in-Docker) with its own fixed IP and its own TLS-protected Docker API, so the server stack in
+# server.compose.yml is exercised exactly as on real hardware. Used by simulate.ps1:
+#   docker compose --env-file sim.env -f server.compose.yml -f sim.compose.yml up -d --build
+
+x-sim-host: &sim-host
+  image: docker:29-dind
+  privileged: true
+  volumes:
+    # dind writes ca/, server/ and client/ certificates under DOCKER_TLS_CERTDIR
+    - sim-certs:/certs
+  restart: unless-stopped
+
+services:
+  host-1:
+    <<: *sim-host
+    hostname: machine-1
+    environment: { DOCKER_TLS_CERTDIR: /certs/machine-1 }
+    networks: { cluster-net: { ipv4_address: 172.30.0.11 } }
+  host-2:
+    <<: *sim-host
+    hostname: machine-2
+    environment: { DOCKER_TLS_CERTDIR: /certs/machine-2 }
+    networks: { cluster-net: { ipv4_address: 172.30.0.12 } }
+  host-3:
+    <<: *sim-host
+    hostname: machine-3
+    environment: { DOCKER_TLS_CERTDIR: /certs/machine-3 }
+    networks: { cluster-net: { ipv4_address: 172.30.0.13 } }
+  host-4:
+    <<: *sim-host
+    hostname: machine-4
+    environment: { DOCKER_TLS_CERTDIR: /certs/machine-4 }
+    networks: { cluster-net: { ipv4_address: 172.30.0.14 } }
+  host-5:
+    <<: *sim-host
+    hostname: machine-5
+    environment: { DOCKER_TLS_CERTDIR: /certs/machine-5 }
+    networks: { cluster-net: { ipv4_address: 172.30.0.15 } }
+
+  # The engine reads each host's client certificate from the shared volume
+  remediation-engine:
+    volumes:
+      - sim-certs:/certs:ro
+
+networks:
+  cluster-net:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  sim-certs:

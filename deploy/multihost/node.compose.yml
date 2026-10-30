@@ -1,0 +1,60 @@
+name: self-healing-node
+
+# Runs on EACH of the 5 physical machines. Example for the first one:
+#   MACHINE_ID=machine-1 EXCLUSIVE_SERVICE=true LOKI_URL=http://<server-ip>:3100/loki/api/v1/push \
+#     docker compose -f node.compose.yml up -d --build
+# The server reaches this machine on :3000 (app + metrics), :8082 (cAdvisor) and :2376 (Docker API, TLS).
+# Firewall those three ports so only the server can reach them - /fault/* and the Docker API must not be public.
+
+services:
+  machine-node:
+    build:
+      context: ../../machine-node
+    image: self-healing/machine-node:latest
+    container_name: ${MACHINE_ID:?set MACHINE_ID (machine-1 .. machine-5)}
+    environment:
+      MACHINE_ID: ${MACHINE_ID}
+      PORT: "3000"
+      CONTAINER_MEM_LIMIT_MB: "256"
+      SIMULATE_GPU: ${SIMULATE_GPU:-true}
+      EXCLUSIVE_SERVICE: ${EXCLUSIVE_SERVICE:-false}
+    mem_limit: 256m
+    memswap_limit: 256m
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  # Same containerd-mode flags as the single-host compose (Docker 29 image store breaks the docker handler)
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    privileged: true
+    command:
+      - --housekeeping_interval=5s
+      - --docker=unix:///var/run/cadvisor-docker-disabled.sock
+      - --containerd=/var/run/containerd/containerd.sock
+      - --containerd-namespace=moby
+      - --env_metadata_whitelist=MACHINE_ID
+      - --store_container_labels=false
+    ports:
+      - "8082:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:3.2.1
+    command: -config.file=/etc/promtail/promtail-config.yml -config.expand-env=true
+    environment:
+      LOKI_URL: ${LOKI_URL:?set LOKI_URL (http://<server-ip>:3100/loki/api/v1/push)}
+    volumes:
+      - ./promtail-node.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail-data:/promtail
+    restart: unless-stopped
+
+volumes:
+  promtail-data:
