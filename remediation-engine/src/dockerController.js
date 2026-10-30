@@ -1,5 +1,7 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const Docker = require('dockerode');
 const axiosLib = require('axios');
 const client = require('prom-client');
@@ -52,6 +54,45 @@ function createMetrics(register) {
   };
 }
 
+const MACHINE_ID_PATTERN = /^machine-[1-9][0-9]*$/;
+
+/**
+ * Multi-host mode: DOCKER_HOSTS maps machine ids to the Docker daemon on that machine, e.g.
+ *   {"machine-1": {"url": "tcp://10.0.0.11:2376", "certDir": "/certs/machine-1"}, "machine-2": "tcp://lab-2:2375"}
+ * certDir holds ca.pem, cert.pem and key.pem for mutual TLS. Unlisted machines use the local socket.
+ */
+function parseDockerHosts(raw) {
+  if (!raw || !String(raw).trim()) return {};
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`DOCKER_HOSTS is not valid JSON: ${err.message}`);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('DOCKER_HOSTS must be a JSON object');
+  const hosts = {};
+  for (const [machineId, value] of Object.entries(parsed)) {
+    if (!MACHINE_ID_PATTERN.test(machineId)) throw new Error(`DOCKER_HOSTS: invalid machine id "${machineId}"`);
+    const spec = typeof value === 'string' ? { url: value } : value || {};
+    let url;
+    try {
+      url = new URL(spec.url);
+    } catch (_) {
+      throw new Error(`DOCKER_HOSTS: ${machineId} needs a tcp://host:port url`);
+    }
+    if (url.protocol !== 'tcp:' || !url.hostname) throw new Error(`DOCKER_HOSTS: ${machineId} needs a tcp://host:port url`);
+    const certDir = typeof spec.certDir === 'string' && spec.certDir ? spec.certDir : null;
+    hosts[machineId] = { host: url.hostname, port: Number(url.port) || (certDir ? 2376 : 2375), certDir };
+  }
+  return hosts;
+}
+
+function remoteDockerClient(spec) {
+  if (!spec.certDir) return new Docker({ host: spec.host, port: spec.port, protocol: 'http' });
+  const read = (file) => fs.readFileSync(path.join(spec.certDir, file));
+  return new Docker({ host: spec.host, port: spec.port, protocol: 'https', ca: read('ca.pem'), cert: read('cert.pem'), key: read('key.pem') });
+}
+
 function remediationError(result, message) {
   const err = new Error(message);
   err.result = result;
@@ -67,6 +108,8 @@ function createRemediator(options = {}) {
     // Internal cluster traffic must never be routed through a container-level HTTP proxy
     http = axiosLib.create({ proxy: false }),
     docker = new Docker({ socketPath: process.env.DOCKER_SOCKET || '/var/run/docker.sock' }),
+    dockerHosts = parseDockerHosts(process.env.DOCKER_HOSTS),
+    dockerFactory = remoteDockerClient,
     lbUrl = process.env.LB_URL || 'http://smart-lb-controller:5000',
     nodePort = envInt('NODE_PORT', 3000),
     etaSeconds = envInt('REBOOT_ETA_SECONDS', 30),
@@ -83,6 +126,12 @@ function createRemediator(options = {}) {
   } = options;
 
   const metrics = createMetrics(register);
+  const remoteDocker = {};
+  for (const [machineId, spec] of Object.entries(dockerHosts)) {
+    remoteDocker[machineId] = dockerFactory(spec);
+    if (!spec.certDir) logger('warn', `${machineId}: Docker API at ${spec.host}:${spec.port} has no TLS - use only on a trusted lab network`, { machineId });
+  }
+  const dockerFor = (machineId) => remoteDocker[machineId] || docker;
   const { remediationTotal, remediationDuration, remediationLast } = metrics;
 
   // ---------------------------------------------------------------- Smart LB handshake (Contract C)
@@ -104,12 +153,13 @@ function createRemediator(options = {}) {
 
   // ---------------------------------------------------------------- Dockerode helpers
   async function findContainer(machineId) {
-    const containers = await docker.listContainers({ all: true });
+    const daemon = dockerFor(machineId);
+    const containers = await daemon.listContainers({ all: true });
     const match =
       containers.find((c) => (c.Labels || {})['com.docker.compose.service'] === machineId) ||
       containers.find((c) => (c.Names || []).some((n) => n === `/${machineId}`)) ||
       containers.find((c) => (c.Names || []).some((n) => new RegExp(`[-_]${machineId}[-_]\\d+$`).test(n)));
-    return match ? docker.getContainer(match.Id) : null;
+    return match ? daemon.getContainer(match.Id) : null;
   }
 
   async function waitForHealthy(machineId) {
@@ -243,4 +293,4 @@ function createRemediator(options = {}) {
   return { remediate, notifyLoadBalancer, findContainer, readGauges, register, metrics, log: logger };
 }
 
-module.exports = { createRemediator, log, REASON, EXCLUSIVE_SERVICES, RECOVERY_THRESHOLD };
+module.exports = { createRemediator, parseDockerHosts, log, REASON, EXCLUSIVE_SERVICES, RECOVERY_THRESHOLD };

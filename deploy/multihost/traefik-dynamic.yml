@@ -1,0 +1,38 @@
+# Traefik file-provider config for the multi-machine setup (the docker provider only sees the local host).
+# Same behaviour as the single-host labels: /api/shared over all 5 machines with 2s /health checks, so a
+# rebooting machine drops out of rotation; the exclusive GPU service always goes through the Smart LB.
+http:
+  routers:
+    shared:
+      rule: "PathPrefix(`/api/shared`)"
+      entryPoints: [web]
+      service: shared
+      middlewares: [shared-retry]
+    smartlb:
+      rule: "PathPrefix(`/api/gpu-render`) || PathPrefix(`/cluster-status`)"
+      entryPoints: [web]
+      service: smartlb
+
+  middlewares:
+    shared-retry:
+      retry:
+        attempts: 3
+        initialInterval: 100ms
+
+  services:
+    shared:
+      loadBalancer:
+        healthCheck:
+          path: /health
+          interval: 2s
+          timeout: 1s
+        servers:
+          - url: http://machine-1:3000
+          - url: http://machine-2:3000
+          - url: http://machine-3:3000
+          - url: http://machine-4:3000
+          - url: http://machine-5:3000
+    smartlb:
+      loadBalancer:
+        servers:
+          - url: http://smart-lb-controller:5000

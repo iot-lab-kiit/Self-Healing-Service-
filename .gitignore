@@ -1,3 +1,5 @@
 node_modules/
 .env
 *.log
+deploy/multihost/server.env
+deploy/multihost/certs/
