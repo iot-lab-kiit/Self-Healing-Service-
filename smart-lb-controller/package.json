@@ -4,7 +4,8 @@
   "description": "Cluster state registry and exclusive-service gatekeeper with a live self-healing waiting screen",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"
