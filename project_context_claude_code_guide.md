@@ -259,3 +259,56 @@ Strict Requirements:
 5. Create `CLAUDE.md`, `.env.example`, and a comprehensive `README.md` with architecture diagrams and demo verification commands.
 6. After generating all files, run `node --check` on every JavaScript file to verify there are zero syntax errors.
 ```
+
+---
+
+## 9. Verification Status (2026-10-30)
+
+Each branch was completed, reviewed for bugs and security issues, and tested against sample inputs and expected outputs. Docker was not available on the verification machine, so every test runs in-process with Docker faked. The live cluster check (`remediation-engine/scripts/e2e.ps1`) is still pending.
+
+### 9.1 Branch results
+
+| Branch | Commit | Test command | Result |
+| :--- | :--- | :--- | :--- |
+| `feat/remediation-engine` | `7b85e23` | `cd remediation-engine && npm test` | 34 / 34 pass |
+| `feat/machine-node` | `3215a51` | `cd machine-node && npm test` | 16 / 16 pass |
+| `feat/smart-lb` | `660ccbb` | `cd smart-lb-controller && npm test` | 41 / 41 pass |
+| `feat/observability-stack` | `aeace0e` | `python -m unittest discover -s observability/tests -v` | 51 / 51 pass |
+
+A trial merge of all four branches onto `main` had no conflicts. All 142 tests pass on the merged tree, and `node --check` passes on every JavaScript file.
+
+### 9.2 Sample inputs and verified outputs
+
+| Component | Input | Verified output |
+| :--- | :--- | :--- |
+| machine-node | `GET /metrics` | All five `node_*{machine_id="machine-1"}` series, including `node_container_restart_count 0` before any fault, plus default `prom-client` metrics |
+| machine-node | `POST /fault/memory` (called twice) | RAM plateaus at 88-90 % and never goes above 90 % of the limit |
+| machine-node | `POST /fault/gpu`, `/fault/cpu`, `/fault/container-loop` | GPU ≈ 93 %, CPU ≈ 91.2 % (`/metrics` still responds), restart counter +1 every 5 s and RAM ≈ 88.5 % |
+| machine-node | `POST /fault/reset` | Baseline values, buffers freed, all fault timers cleared |
+| remediation-engine | Alertmanager v4 payload (fixtures in `remediation-engine/test/fixtures/`) | `202 {"ok":true,"accepted":["machine-1"],"skipped":[]}` |
+| remediation-engine | Same alert again within 45 s | `skipped: [{ "reason": "cooldown", "cooldownRemainingSeconds": 45 }]` |
+| remediation-engine | Invalid ids (`machine-0`, `../etc`, `machine-1; rm -rf /`) | Ignored; Docker never called |
+| remediation-engine | Restart or health check fails | LB is re-sent `REBOOTING` with `etaSeconds: 60` and a "retrying" reason, never `ONLINE`. After 3 failures in 10 min the engine stops restarting that node (`circuit_open`) until `POST /reset/<id>` |
+| smart-lb-controller | Contract C `REBOOTING` payload, then `GET /api/gpu-render` with `Accept: application/json` | `503`, `Retry-After: 30`, `{ error, machineId, reason, retryAfterSeconds }` |
+| smart-lb-controller | Same request from a browser | `503` countdown HTML with `reason` HTML-escaped (an XSS payload is rendered as inert text) |
+| smart-lb-controller | Contract C `ONLINE`, then `GET /api/gpu-render` | Proxied `200` from machine-1; an unreachable or stalled upstream returns a clean `503` JSON |
+| observability | Config files | 5 s scrape and evaluation; `> 85` with `for: 60s`; `group_by: [machine_id]`; webhook URL; Promtail `container_name`; Grafana datasource UIDs, 85 % thresholds, Loki and MTTR panels |
+
+### 9.3 Cross-service integration (real code, Docker faked)
+
+The real machine-node, smart-lb-controller and remediation-engine code ran together over HTTP. All 12 checks passed:
+- **Fault and alert:** a GPU fault reads 93.5 % on the node, and the webhook returns 202.
+- **During the restart:** the LB returns 503 with `Retry-After: 30` and the countdown HTML, and `/cluster-status` shows machine-1 as `REBOOTING` with `["gpu-render"]`.
+- **After the restart:** the engine records `success` with `vitalsRecovered` (GPU 9 %), the LB shows `ONLINE` and serves `/api/gpu-render` with 200 again, and the MTTR metrics are recorded.
+- **Failure path:** the LB stays `REBOOTING` with a 60 s ETA instead of routing to a dead node.
+
+### 9.4 Security fixes applied
+- **Ports:** admin and internal host ports (4000, 5000, 3001-3005, 8081, 8082, 9090, 9093, 3100, 3000) are bound to `127.0.0.1`. Only the `:8080` gateway is public.
+- **smart-lb-controller:** fixed the waiting-page template injection and made the machine id safe inside the page script. CORS is limited to GET routes, so websites cannot call `/internal/node-status`. Request bodies are validated, `etaSeconds` is capped, and upstream calls have a hard deadline.
+- **machine-node and remediation-engine:** errors return JSON with no stack trace; the memory fault has a hard allocation cap.
+- **Alert rules:** the cAdvisor memory rule ignores containers with no memory limit, which prevents a false alert and a restart storm.
+
+### 9.5 Open items
+1. Run `powershell -ExecutionPolicy Bypass -File remediation-engine/scripts/e2e.ps1` on a machine with Docker to confirm the live loop and measure MTTR.
+2. Check that `gcr.io/cadvisor/cadvisor:v0.49.1` and `grafana/promtail:3.2.1` start on Docker Engine 29+. Like Traefik v3.0, they may report "client version too old".
+3. Accepted for the demo: Grafana `admin/admin` with anonymous Viewer access, and the remediation engine has read-write access to the Docker socket (needed for restarts).

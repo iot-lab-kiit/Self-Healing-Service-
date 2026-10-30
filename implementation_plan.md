@@ -248,3 +248,16 @@ Endpoint: `POST http://smart-lb-controller:5000/internal/node-status`
 6. **Confirm Self-Healing Recovery:**
    * `remediation-engine` restarts `machine-1` via `Dockerode`.
    * Once `machine-1` boots back up with RAM/GPU back at baseline ($\sim 15\%$), it notifies `smart-lb-controller` (`status: "ONLINE"`), and the browser waiting screen automatically refreshes to show the working `/api/gpu-render` response.
+
+---
+
+## 7. Implementation & Verification Status (2026-10-30)
+
+Full results are in `project_context_claude_code_guide.md` §9.
+
+- [x] **Phase 1 – machine-node** (`feat/machine-node`, 16 tests): all routes and faults match the spec; restart counter exported at 0; memory fault capped; JSON errors.
+- [x] **Phase 2 – remediation-engine** (`feat/remediation-engine`, 34 tests): webhook → `REBOOTING` handshake → `container.restart({ t: 5 })` → `/health` poll → metrics < 50 % → `ONLINE`, with the 45 s cooldown. Added: the LB stays `REBOOTING` on failure, the node is restarted even when the LB is down, and restarts stop after repeated failures.
+- [x] **Phase 3 – smart-lb-controller** (`feat/smart-lb`, 41 tests): registry, `/cluster-status`, `/api/gpu-render` proxy and 503 gate with `Retry-After`, HTML/JSON chosen by `Accept`, escaped waiting screen.
+- [x] **Phase 4 – observability** (`feat/observability-stack`, 51 config checks): 5 s scrape, `> 85` for 60 s, Alertmanager → `remediation-engine:4000/webhook`, Loki/Promtail, Grafana provisioning.
+- [x] **Integration:** all four branches merge without conflicts; 142 tests pass on the merged tree; a 12-check cross-service run of the real code (Docker faked) covers fault → alert → 503 gate → restart → `ONLINE`, plus the failure path.
+- [ ] **§6 demo on a live cluster:** run `remediation-engine/scripts/e2e.ps1` with Docker (not available on the verification machine).
