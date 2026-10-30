@@ -97,7 +97,8 @@
 
 <script>
 (function () {
-  var MACHINE_ID = '{{MACHINE_ID}}';
+  var MACHINE_ID = {{MACHINE_ID_JSON}};
+  var STARTED_AT = {{REBOOT_STARTED_AT}};
   var TOTAL = Math.max(1, Number('{{TOTAL_SECONDS}}'));
   var REMAINING = Math.max(0, Number('{{REMAINING_SECONDS}}'));
   var ELAPSED = Math.max(0, Number('{{ELAPSED_SECONDS}}'));
@@ -142,6 +143,8 @@
       .then(function (j) {
         var m = j && j.machines && j.machines[MACHINE_ID];
         if (m && m.status === 'ONLINE') recovered();
+        // A new REBOOTING notice (e.g. remediation retry with a fresh ETA): reload to restart the countdown
+        else if (m && m.status === 'REBOOTING' && m.rebootStartedAt !== STARTED_AT) { done = true; window.location.reload(); }
       })
       .catch(function () { /* controller briefly unreachable - keep polling */ });
   }
