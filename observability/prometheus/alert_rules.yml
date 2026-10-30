@@ -40,11 +40,12 @@ groups:
           description: "{{ $labels.machine_id }} spun up {{ $value | printf \"%.0f\" }} containers in the last minute"
 
       # ---- Out-of-band (cAdvisor cgroup) rules: fire even if the Node.js event loop is frozen ----
+      # cAdvisor reports limit 0 for an unlimited container; "> 0" stops x/0 = +Inf from firing (restart storm)
       - alert: ContainerMemoryNearLimit
         expr: |
           label_replace(
             100 * container_memory_working_set_bytes{name=~"machine-[1-5]"}
-                / container_spec_memory_limit_bytes{name=~"machine-[1-5]"},
+                / (container_spec_memory_limit_bytes{name=~"machine-[1-5]"} > 0),
             "machine_id", "$1", "name", "(.*)"
           ) > 85
         for: 60s
